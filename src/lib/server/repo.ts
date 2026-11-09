@@ -171,17 +171,20 @@ export function updateCatalogItem(
       itemId,
     );
   if (patch.excluded !== undefined) {
-    run(
-      "UPDATE catalog SET excluded = ?, approved = 0 WHERE id = ?",
-      patch.excluded ? 1 : 0,
+    // A variant follows its parent out of the comic, never back in. An
+    // inclusion therefore lands only on an entry whose parent is still in.
+    const parent = one<{ excluded: number }>(
+      "SELECT p.excluded FROM catalog c JOIN catalog p ON p.id = c.parent_id WHERE c.id = ?",
       itemId,
     );
-    // A variant follows its parent out of the comic, never back in.
     if (patch.excluded) {
+      run("UPDATE catalog SET excluded = 1, approved = 0 WHERE id = ?", itemId);
       run(
         "UPDATE catalog SET excluded = 1, approved = 0 WHERE parent_id = ?",
         itemId,
       );
+    } else if (!parent?.excluded) {
+      run("UPDATE catalog SET excluded = 0 WHERE id = ?", itemId);
     }
   }
 }
@@ -426,6 +429,23 @@ export function setPageStatus(pageId: string, approved: boolean): void {
     approved ? "approved" : "drawn",
     approved ? now() : null,
     pageId,
+  );
+}
+
+/** New art replaces approved art, so the page and its chapter are planned again. */
+export function reopenPage(pageId: string): void {
+  const page = one<{ chapter_id: string }>(
+    "SELECT chapter_id FROM pages WHERE id = ?",
+    pageId,
+  );
+  if (!page) return;
+  run(
+    "UPDATE pages SET status = 'planned', approved_at = NULL WHERE id = ?",
+    pageId,
+  );
+  run(
+    "UPDATE chapters SET status = 'planned', approved_at = NULL WHERE id = ?",
+    page.chapter_id,
   );
 }
 

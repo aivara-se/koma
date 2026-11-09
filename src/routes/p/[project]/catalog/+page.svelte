@@ -28,19 +28,25 @@
       <span class="small">{pct}%</span>
     </div>
     <div class="bar"><div style="width:{pct}%"></div></div>
-    <form method="POST" action="?/approve">
-      <button
-        class="btn primary"
-        disabled={!p.complete}
-        style="width:100%; margin-top:12px"
-      >
-        Lock catalog & plan pages →
-      </button>
-    </form>
-    {#if !p.complete}
-      <p class="muted small" style="margin:8px 0 0">
-        Approve or exclude every entry. A variant follows its parent.
+    {#if data.locked}
+      <p class="small muted" style="margin:10px 0 0">
+        Locked. The catalog is read-only until the story is read again.
       </p>
+    {:else}
+      <form method="POST" action="?/approve">
+        <button
+          class="btn primary"
+          disabled={!p.complete}
+          style="width:100%; margin-top:12px"
+        >
+          Lock catalog & plan pages →
+        </button>
+      </form>
+      {#if !p.complete}
+        <p class="muted small" style="margin:8px 0 0">
+          Approve or exclude every entry. A variant follows its parent.
+        </p>
+      {/if}
     {/if}
   </div>
 </div>
@@ -84,16 +90,18 @@
                   No plate yet.<br />Draw one to fix the look.
                 </div>
               {/if}
-              <form method="POST" action="?/draw">
-                <input type="hidden" name="itemId" value={item.id} />
-                <button
-                  class="btn small"
-                  type="submit"
-                  style="width:100%; margin-top:8px"
-                >
-                  {item.image ? "Redraw plate" : "Draw plate"}
-                </button>
-              </form>
+              {#if !data.locked}
+                <form method="POST" action="?/draw">
+                  <input type="hidden" name="itemId" value={item.id} />
+                  <button
+                    class="btn small"
+                    type="submit"
+                    style="width:100%; margin-top:8px"
+                  >
+                    {item.image ? "Redraw plate" : "Draw plate"}
+                  </button>
+                </form>
+              {/if}
               {#if item.image}
                 <div
                   class="mono muted"
@@ -108,17 +116,24 @@
               <input type="hidden" name="itemId" value={item.id} />
               <label class="field">
                 <span>Name</span>
-                <input type="text" name="name" value={item.name} />
+                <input
+                  type="text"
+                  name="name"
+                  value={item.name}
+                  readonly={data.locked}
+                />
               </label>
               <label class="field">
                 <span>Description</span>
-                <textarea name="description" rows="3"
+                <textarea name="description" rows="3" readonly={data.locked}
                   >{item.description}</textarea
                 >
               </label>
               <label class="field">
                 <span>Visual brief</span>
-                <textarea name="visual" rows="2">{item.visual}</textarea>
+                <textarea name="visual" rows="2" readonly={data.locked}
+                  >{item.visual}</textarea
+                >
               </label>
               <div class="row spread">
                 <div class="row">
@@ -127,6 +142,7 @@
                       type="checkbox"
                       name="approved"
                       checked={!!item.approved}
+                      disabled={data.locked}
                     /> Approved
                   </label>
                   <label class="check">
@@ -134,10 +150,13 @@
                       type="checkbox"
                       name="excluded"
                       checked={!!item.excluded}
+                      disabled={data.locked}
                     /> Not in the comic
                   </label>
                 </div>
-                <button class="btn small" type="submit">Save</button>
+                {#if !data.locked}
+                  <button class="btn small" type="submit">Save</button>
+                {/if}
               </div>
             </form>
           </div>
@@ -163,12 +182,19 @@
                   <div class="variant-body">
                     <label class="field">
                       <span>Variant</span>
-                      <input type="text" name="name" value={v.name} />
+                      <input
+                        type="text"
+                        name="name"
+                        value={v.name}
+                        readonly={data.locked}
+                      />
                     </label>
                     <label class="field">
                       <span>What changed</span>
-                      <textarea name="description" rows="3"
-                        >{v.description}</textarea
+                      <textarea
+                        name="description"
+                        rows="3"
+                        readonly={data.locked}>{v.description}</textarea
                       >
                     </label>
                     <input type="hidden" name="visual" value={v.visual} />
@@ -178,18 +204,21 @@
                           type="checkbox"
                           name="approved"
                           checked={!!v.approved}
+                          disabled={data.locked}
                         /> Approved
                       </label>
-                      <div class="row">
-                        <button
-                          class="btn small ghost"
-                          type="submit"
-                          formaction="?/draw"
-                        >
-                          {v.image ? "Redraw" : "Draw"}
-                        </button>
-                        <button class="btn small" type="submit">Save</button>
-                      </div>
+                      {#if !data.locked}
+                        <div class="row">
+                          <button
+                            class="btn small ghost"
+                            type="submit"
+                            formaction="?/draw"
+                          >
+                            {v.image ? "Redraw" : "Draw"}
+                          </button>
+                          <button class="btn small" type="submit">Save</button>
+                        </div>
+                      {/if}
                     </div>
                   </div>
                 </form>
@@ -278,9 +307,6 @@
   }
   .variant.excluded {
     opacity: 0.4;
-  }
-  .variant-draw {
-    margin-top: -6px;
   }
   .fields :global(textarea) {
     font-size: 0.88rem;

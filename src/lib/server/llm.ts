@@ -12,6 +12,12 @@ const BASE = (process.env.KOMA_BASE_URL ?? "https://api.openai.com/v1").replace(
 export const TEXT_MODEL = process.env.KOMA_TEXT_MODEL ?? "gpt-4.1-mini";
 export const hasModel = KEY.length > 0;
 
+/**
+ * The most characters one model call reads. A longer story is refused, never
+ * cut: "read it once" is the product, and a silent cut drops the ending.
+ */
+export const MODEL_MAX_CHARS = 120_000;
+
 const SYSTEM = `You are a manga editor. You read a story and return a catalog of everything the artist must keep consistent.
 Return JSON only, with this shape:
 {"characters":[{"name":"","description":"","visual":"","variants":[{"name":"","description":"","visual":""}]}],
@@ -40,6 +46,10 @@ export async function analyseWithModel(
   story: string,
 ): Promise<{ analysis: Analysis; provider: string }> {
   if (!hasModel) throw new Error("no model key");
+  if (story.length > MODEL_MAX_CHARS)
+    throw new Error(
+      `story is ${story.length.toLocaleString()} characters; the model reads at most ${MODEL_MAX_CHARS.toLocaleString()}`,
+    );
   const res = await fetch(`${BASE}/chat/completions`, {
     method: "POST",
     headers: {
@@ -52,7 +62,7 @@ export async function analyseWithModel(
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM },
-        { role: "user", content: story.slice(0, 120_000) },
+        { role: "user", content: story },
       ],
     }),
     signal: AbortSignal.timeout(180_000),

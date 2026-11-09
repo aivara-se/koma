@@ -19,4 +19,4 @@ Excluding a parent excludes its variants. Approving a variant after the parent i
 
 The user cannot skip the review and get a comic; the gate is the workflow. Re-reading the story clears the lock, the catalog and every page — the interface names what it destroys before it runs.
 
-A locked catalog can still be reopened by unlocking it explicitly; that is a deliberate act, and it invalidates the pages drawn from it.
+A locked catalog is read-only and v1 has no separate unlock: the lock holds until the story is read again, which clears it and every page with it.

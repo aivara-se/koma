@@ -1,6 +1,6 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { analyseStory } from "$lib/pipeline/analyze";
-import { hasModel, analyseWithModel } from "$lib/server/llm";
+import { hasModel, analyseWithModel, MODEL_MAX_CHARS } from "$lib/server/llm";
 import { getProject, saveAnalysis } from "$lib/server/repo";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -13,6 +13,11 @@ export const actions: Actions = {
   analyse: async ({ params }) => {
     const project = getProject(params.project);
     if (!project) return fail(404, { message: "No such story" });
+    if (hasModel && project.story.length > MODEL_MAX_CHARS) {
+      return fail(422, {
+        message: `The model reads at most ${MODEL_MAX_CHARS.toLocaleString()} characters; this story is ${project.story.length.toLocaleString()}. Unset KOMA_API_KEY to read it with the offline extractor, or shorten the story.`,
+      });
+    }
 
     let provider = "offline extractor";
     let analysis;

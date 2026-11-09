@@ -43,11 +43,15 @@
         class:active={tab("/catalog")}
         class="tab">2 · Catalog</a
       >
-      <a
-        href="/p/{data.project.id}/chapters"
-        class:active={tab("/chapters")}
-        class="tab">3 · Pages</a
-      >
+      {#if data.project.catalog_approved_at}
+        <a
+          href="/p/{data.project.id}/chapters"
+          class:active={tab("/chapters")}
+          class="tab">3 · Pages</a
+        >
+      {:else}
+        <span class="tab off" title="Lock the catalog first">3 · Pages</span>
+      {/if}
     </nav>
   </header>
 

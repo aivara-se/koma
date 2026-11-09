@@ -11,6 +11,8 @@ import {
   getCatalog,
   getChapter,
   getPage,
+  getProject,
+  reopenPage,
   saveImage,
   savePages,
   setChapterStatus,
@@ -46,6 +48,11 @@ export const actions: Actions = {
   plan: async ({ params }) => {
     const chapter = getChapter(params.chapter);
     if (!chapter) return fail(404, { message: "No such chapter" });
+    const project = getProject(params.project);
+    if (!project?.catalog_approved_at)
+      return fail(409, {
+        message: "Lock the catalog before planning a chapter.",
+      });
     const catalog = getCatalog(params.project);
     const characters = catalog
       .filter((c) => c.kind === "character" && !c.excluded)
@@ -70,6 +77,7 @@ export const actions: Actions = {
     const page = getPage(pageId);
     const panel = page?.panels.find((p) => p.id === panelId);
     if (!page || !panel) return fail(404, { message: "No such panel" });
+    if (page.status === "approved") reopenPage(page.id);
 
     const catalog = getCatalog(params.project);
     const map = new Map(
@@ -96,6 +104,7 @@ export const actions: Actions = {
     const force = form.get("force") === "on";
     const page = getPage(pageId);
     if (!page) return fail(404, { message: "No such page" });
+    if (page.status === "approved") reopenPage(page.id);
     const catalog = getCatalog(params.project);
     const map = new Map(
       catalog.flatMap((c) => [c, ...c.variants]).map((c) => [c.id, c]),

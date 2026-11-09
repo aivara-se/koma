@@ -9,6 +9,7 @@ import {
   catalogProgress,
   getCatalog,
   getCatalogItem,
+  getProject,
   saveImage,
   updateCatalogItem,
 } from "$lib/server/repo";
@@ -21,6 +22,7 @@ export const load: PageServerLoad = ({ params }) => {
     characters: items.filter((i) => i.kind === "character"),
     locations: items.filter((i) => i.kind === "location"),
     progress: catalogProgress(params.project),
+    locked: Boolean(getProject(params.project)?.catalog_approved_at),
     model: hasModel,
   };
 };
@@ -33,6 +35,10 @@ function refsFor(item: CatalogItem): string[] {
 
 export const actions: Actions = {
   save: async ({ request, params }) => {
+    if (getProject(params.project)?.catalog_approved_at)
+      return fail(409, {
+        message: "The catalog is locked. Read the story again to change it.",
+      });
     const form = await request.formData();
     const itemId = String(form.get("itemId") ?? "");
     if (!itemId) return fail(400, { message: "Missing entry" });
@@ -62,6 +68,10 @@ export const actions: Actions = {
   },
 
   draw: async ({ request, params }) => {
+    if (getProject(params.project)?.catalog_approved_at)
+      return fail(409, {
+        message: "The catalog is locked. Read the story again to change it.",
+      });
     const form = await request.formData();
     const itemId = String(form.get("itemId") ?? "");
     const item = getCatalogItem(itemId);
