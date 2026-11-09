@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { PAGE } from "../config";
-import { layoutFor, planChapter, selectBeats } from "./plan";
+import { DENSITY, PAGE } from "../config";
+import { sentences } from "./analyze";
+import { planChapter, splitIntoPages } from "./plan";
 
 const TEXT = `Mira walked into the Salt Market and stopped at the corner stall.
 "You are late," Sable said, and put down the lamp.
@@ -10,27 +11,24 @@ At dawn the lighthouse was still dark and the whole town could see it.
 Mira climbed the hundred and twelve steps with a crate of brass fittings.
 The clockwork turned, slowly at first, and then the beam found the sea.`;
 
-describe("selectBeats", () => {
-  test("keeps fewer beats than sentences and never none", () => {
-    const beats = selectBeats(TEXT);
-    const all = TEXT.split("\n").filter(Boolean);
-    expect(beats.length).toBeGreaterThan(0);
-    expect(beats.length).toBeLessThanOrEqual(all.length);
+describe("splitIntoPages", () => {
+  test("uses every sentence exactly once, in order", () => {
+    const chunks = splitIntoPages(TEXT, 30);
+    const source = sentences(TEXT);
+    const planned = chunks.flatMap((chunk) => sentences(chunk));
+    expect(planned).toEqual(source);
+    expect(chunks.length).toBeGreaterThan(1);
   });
-});
 
-describe("layoutFor", () => {
-  test("covers every panel exactly once", () => {
-    for (let n = 1; n <= 9; n++) {
-      const boxes = layoutFor(n);
-      expect(boxes.length).toBe(n);
-      expect(new Set(boxes.map((b) => `${b.row}:${b.col}`)).size).toBe(n);
+  test("honours the word budget within one sentence", () => {
+    const chunks = splitIntoPages(TEXT, 30);
+    for (const chunk of chunks.slice(0, -1)) {
+      expect(chunk.split(/\s+/).length).toBeGreaterThanOrEqual(30);
     }
   });
 
-  test("starts with a full-width row", () => {
-    expect(layoutFor(5)[0]!.span).toBe(2);
-    expect(layoutFor(5)[0]!.col).toBe(0);
+  test("never returns an empty page for a non-empty chapter", () => {
+    expect(splitIntoPages("One short line.").length).toBe(1);
   });
 });
 
@@ -41,31 +39,36 @@ describe("planChapter", () => {
     ["Salt Market", "Lighthouse"],
   );
 
-  test("never puts more panels on a page than the config allows", () => {
+  test("plans one page per chunk", () => {
+    expect(pages.length).toBe(splitIntoPages(TEXT).length);
     expect(pages.length).toBeGreaterThan(0);
-    for (const page of pages)
-      expect(page.panels.length).toBeLessThanOrEqual(PAGE.panelsPerPage);
   });
 
-  test("carries the named cast into the panel references", () => {
-    const refs = pages.flatMap((p) => p.panels.flatMap((pn) => pn.refs));
+  test("gives every page a beat, a caption and a panel plan", () => {
+    for (const page of pages) {
+      expect(page.beat.length).toBeGreaterThan(10);
+      expect(page.script.caption.length).toBeGreaterThan(0);
+      expect(page.script.direction.length).toBeGreaterThan(0);
+    }
+  });
+
+  test("carries the named cast and the place into the references", () => {
+    const refs = pages.flatMap((page) => page.refs);
     expect(refs).toContain("Mira");
-    expect(refs).toContain("Sable");
+    expect(refs).toContain("Salt Market");
   });
 
-  test("keeps a spoken line with a speaker", () => {
-    const lines = pages.flatMap((p) => p.panels.flatMap((pn) => pn.dialogue));
+  test("keeps a spoken line with a speaker, and no more than the cap", () => {
+    const lines = pages.flatMap((page) => page.script.dialogue);
     expect(lines.length).toBeGreaterThan(0);
     expect(lines[0]!.text).toContain("You are late");
-    expect(lines[0]!.speaker.length).toBeGreaterThan(0);
+    expect(lines[0]!.speaker).toBe("Sable");
+    for (const page of pages)
+      expect(page.script.dialogue.length).toBeLessThanOrEqual(PAGE.maxDialogue);
   });
 
-  test("gives every panel the position the page needs", () => {
-    for (const page of pages) {
-      for (const panel of page.panels) {
-        expect(panel.row).toBeGreaterThanOrEqual(0);
-        expect(panel.span === 1 || panel.span === 2).toBe(true);
-      }
-    }
+  test("a page of the demo novel stays near the configured density", () => {
+    const chunkWords = splitIntoPages(TEXT).map((c) => c.split(/\s+/).length);
+    expect(Math.min(...chunkWords)).toBeLessThan(DENSITY.wordsPerPage * 1.5);
   });
 });

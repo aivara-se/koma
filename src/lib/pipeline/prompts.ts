@@ -1,8 +1,8 @@
 // Every prompt is built here, so a page and a reference plate say the same
 // thing about the same character. The style block is appended verbatim.
 
-import { ART_STYLE, IMAGE, PAGE } from "../config";
-import type { CatalogItem, Page, Panel } from "../types";
+import { ART_STYLE, PAGE, PLATE } from "../config";
+import type { CatalogItem, Chapter, Page } from "../types";
 
 function join(parts: (string | undefined | null)[]): string {
   return parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
@@ -20,8 +20,8 @@ export function characterPrompt(
     `Character reference sheet of ${subject}.`,
     detail,
     item.visual,
-    `Draw ${IMAGE.sheetViews.join(", ")} views of one person, full body, identical face, identical outfit, neutral studio light, plain light grey background.`,
-    ART_STYLE.block,
+    `Draw front, three-quarter and profile views of one person, full body, identical face, identical outfit, neutral studio light, plain light grey background, at ${PLATE.width}×${PLATE.height}.`,
+    ART_STYLE.plate,
   ]);
 }
 
@@ -37,61 +37,53 @@ export function locationPrompt(
     `Establishing plate of ${subject}.`,
     detail,
     item.visual,
-    `One wide view of the whole place, readable layout, no people in the foreground.`,
-    ART_STYLE.block,
+    `One wide view of the whole place at ${PLATE.width}×${PLATE.height}, readable layout, no people in the foreground.`,
+    ART_STYLE.plate,
   ]);
 }
 
-export function panelPrompt(
-  page: Page,
-  panel: Panel,
-  refs: CatalogItem[],
-  setting: string,
-): string {
-  const cast = refs.map((r) =>
-    r.kind === "character"
-      ? `${r.name}: ${r.description}`
-      : `${r.name} (setting): ${r.description}`,
-  );
-  return join([
-    `Panel ${panel.idx + 1} of page ${page.idx + 1}.`,
-    `Shot: ${panel.shot}.`,
-    panel.action,
-    setting ? `Setting: ${setting}.` : "",
-    cast.length
-      ? `Reference cast — keep face, hair, outfit and proportions exactly: ${cast.join(" | ")}`
-      : "",
-    `Single panel art at ${IMAGE.width}×${IMAGE.height}. No words in the image.`,
-    ART_STYLE.block,
-  ]);
-}
-
-/** The whole page as one prompt, kept for the user to read and edit. */
+/** One prompt, one finished comic page, drawn in a single image call. */
 export function pagePrompt(
-  page: Page,
+  pageNumber: number,
+  chapterTitle: string,
+  beat: string,
+  direction: string[],
   refs: CatalogItem[],
   setting: string,
 ): string {
-  const cast = refs.filter((r) => r.kind === "character");
-  const lines = page.panels.map(
-    (p, i) =>
-      `${i + 1}. ${p.shot} — ${p.action}${p.dialogue.length ? ` (speech: ${p.dialogue.map((d) => `${d.speaker}: "${d.text}"`).join(" / ")})` : ""}`,
-  );
+  const cast = refs
+    .filter((r) => r.kind === "character")
+    .map((r) => `${r.name}: ${r.description}`);
+  const [min, max] = PAGE.panelRange;
   return join([
-    `Manga page ${page.idx + 1}, ${page.panels.length} panels, read top to bottom.`,
-    setting ? `One set throughout: ${setting}.` : "",
-    cast.length ? `Cast: ${cast.map((c) => c.name).join(", ")}.` : "",
-    lines.join(" "),
-    `Panel art is generated one panel at a time from the reference sheets; the page is assembled by Koma.`,
+    `Page ${pageNumber} of the chapter "${chapterTitle}". One complete manga page.`,
+    `Compose ${min} to ${max} panels in a clear grid, black gutters between them, black panel borders, read top to bottom.`,
+    setting ? `The scene: ${setting}.` : "",
+    `This page shows: ${beat}`,
+    direction.length ? `Panel plan: ${direction.join(" ")}` : "",
+    cast.length
+      ? `Cast — keep every face, hairstyle, body and outfit identical to the reference images: ${cast.join(" | ")}`
+      : "",
+    "Art only. The letterer adds every word later, so draw no text, no balloons and no captions.",
     ART_STYLE.block,
   ]);
 }
 
-export function caption(text: string): string {
-  const clean = text.replace(/\s+/g, " ").trim();
-  return clean.length <= PAGE.captionChars
-    ? clean
-    : `${clean.slice(0, PAGE.captionChars - 1).trimEnd()}…`;
+/** The page prompt shown to the user, assembled from the same parts. */
+export function pageDocument(
+  page: Page,
+  chapter: Chapter,
+  refs: CatalogItem[],
+): string {
+  const setting = refs.find((r) => r.kind === "location")?.description ?? "";
+  return pagePrompt(
+    page.idx + 1,
+    chapter.title,
+    page.beat,
+    page.script.direction,
+    refs,
+    setting,
+  );
 }
 
 export function revisePrompt(original: string, note: string): string {

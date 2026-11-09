@@ -8,7 +8,7 @@ Image models write text badly. They misspell, they merge words into the art, the
 
 ## Decision
 
-The model draws panel art only. Captions, speaker labels, balloons, panel borders and gutters are laid out by code from the panel's own data: the dialogue rows, the row and column of the panel, and the page frame.
+The model draws the art and, in page mode, the panel grid, borders and gutters. It draws no words. Captions, speaker labels and balloons are laid out by code from the page's lettering script, or by a hand-lettering pass that reads the same script.
 
 Every prompt ends with the style block, which forbids text, letters, balloons and borders in the image.
 

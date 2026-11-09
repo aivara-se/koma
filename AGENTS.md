@@ -1,6 +1,6 @@
 # Agent Instructions
 
-Koma turns a whole story into manga pages that hold one cast, one set and one art style from the first page to the last.
+Koma turns a whole novel into a comic book that holds one cast, one set and one art style from the first page to the last.
 
 This file is the `aivara-se` agent convention: the rules that hold in every repository. Adopt it, do not fork it. It never describes the state of the work — that lives in the documents below.
 
@@ -18,7 +18,8 @@ One fact, one home: link to a document, never restate it. A sentence here that s
 
 - The look is locked in `src/lib/config.ts`. Change it as a product decision and an ADR, never as a tuning knob inside another change.
 - A page reads only from the approved catalog. A prompt may not introduce a character or a place the catalog does not hold.
-- The model draws art; code draws every letter. Never ask an image model to write words into a picture.
+- One page is one image call at 1K portrait. Do not reintroduce per-panel generation without an ADR that supersedes 007.
+- The model draws art; the lettering script lives beside the page, never inside the image. Never ask an image model to write words into a picture.
 - The offline path is supported, not a mock: with no key the analyser still reads the story and the plates are still drawn. Keep it working and keep it labelled.
 - The pipeline (`src/lib/pipeline/`) stays pure — text in, data out, no database and no network — so it can be tested without a server.
 

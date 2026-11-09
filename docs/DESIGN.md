@@ -20,11 +20,12 @@ Headlines and the story itself are serif (Georgia); controls and metadata are th
 - The home page is two columns: the story goes in on the left, the studio's stories on the right. Under 820 px they stack.
 - The catalog is a single column of cards. A card is a plate on the left and its fields on the right; under 720 px the plate sits above the fields.
 - A variant is a small card under its parent; under 560 px the thumbnail sits above its fields.
-- The chapter page is a page card per page: preview left, prompt and panel list right; under 860 px they stack.
+- The chapter page is a card per page: the portrait page on the left, its beat, script and prompt on the right; under 860 px they stack.
+- The book is one column of pages, chapter marks between them, centred and narrow enough to read without scrolling sideways.
 
 ## The page
 
-A page is 1080 px wide with a 1080:1460 frame, seven pixels of gutter and a black ground — the webtoon width, so it reads on a phone without zooming. Rows are one wide panel or a pair; the first row of a page is always one wide panel. Captions and balloons are drawn by code, never by the model: a balloon is a paper-coloured pill with a red speaker label, and there are never more than two per panel.
+A page is one portrait image, 832 × 1248 (1K, 2:3), drawn by the model in one call. It sits in a 2:3 frame on a black ground, as large as the column allows: on a desktop about 400 px wide beside its controls, on a phone the full width above them. The lettering script sits beside the art, not on it — a caption rule and speaker labels, ready for a lettering pass.
 
 ## Motion
 

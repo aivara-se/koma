@@ -123,17 +123,13 @@ describe("reopenPage", () => {
     const chapter = repo.getChapters(projectId)[0]!;
     repo.savePages(projectId, chapter.id, [
       {
-        panels: [
-          {
-            shot: "wide",
-            action: "Mira waits at the Salt Market.",
-            dialogue: [],
-            refs: [],
-            row: 0,
-            col: 0,
-            span: 1,
-          },
-        ],
+        beat: "Mira waits at the Salt Market.",
+        script: {
+          caption: "Mira waits.",
+          dialogue: [],
+          direction: ["Wide establishing shot of Salt Market."],
+        },
+        refs: ["Mira"],
       },
     ]);
     const page = repo.getChapter(chapter.id)!.pages[0]!;

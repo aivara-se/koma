@@ -49,8 +49,14 @@
           class:active={tab("/chapters")}
           class="tab">3 · Pages</a
         >
+        <a
+          href="/p/{data.project.id}/book"
+          class:active={tab("/book")}
+          class="tab">4 · Book</a
+        >
       {:else}
         <span class="tab off" title="Lock the catalog first">3 · Pages</span>
+        <span class="tab off" title="Lock the catalog first">4 · Book</span>
       {/if}
     </nav>
   </header>

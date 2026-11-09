@@ -11,8 +11,7 @@ import type {
   Page,
   PageDraft,
   PageRow,
-  Panel,
-  PanelRow,
+  PageScript,
   Project,
 } from "../types";
 import { all, id, now, one, run } from "./db";
@@ -59,7 +58,7 @@ export function deleteProject(projectId: string): void {
 
 export function imageFor(
   projectId: string,
-  owner: "catalog" | "panel",
+  owner: "catalog" | "page",
   ownerId: string,
 ): ImageRow | null {
   return one<ImageRow>(
@@ -72,7 +71,7 @@ export function imageFor(
 
 export function saveImage(
   projectId: string,
-  owner: "catalog" | "panel",
+  owner: "catalog" | "page",
   ownerId: string,
   art: { file: string; href: string; provider: string; prompt: string },
 ): ImageRow {
@@ -231,6 +230,20 @@ export function approveCatalog(projectId: string): void {
   );
 }
 
+/** The long read of a novel reports where it is, so the page can say so. */
+export function setAnalysisStatus(
+  projectId: string,
+  status: "running" | "done" | "error",
+  note = "",
+): void {
+  run(
+    "UPDATE projects SET analysis_status = ?, analysis_note = ? WHERE id = ?",
+    status,
+    note,
+    projectId,
+  );
+}
+
 export function saveAnalysis(
   projectId: string,
   analysis: Analysis,
@@ -319,23 +332,31 @@ export function getChapter(chapterId: string): Chapter | null {
   };
 }
 
+function parseScript(raw: string): PageScript {
+  try {
+    const parsed = JSON.parse(raw || "{}") as Partial<PageScript>;
+    return {
+      caption: parsed.caption ?? "",
+      dialogue: Array.isArray(parsed.dialogue) ? parsed.dialogue : [],
+      direction: Array.isArray(parsed.direction) ? parsed.direction : [],
+    };
+  } catch {
+    return { caption: "", dialogue: [], direction: [] };
+  }
+}
+
 function toPage(page: PageRow): Page {
-  const rows = all<PanelRow>(
-    "SELECT * FROM panels WHERE page_id = ? ORDER BY idx ASC",
-    page.id,
-  );
   const projectRow = one<{ project_id: string }>(
     "SELECT c.project_id FROM chapters c WHERE c.id = ?",
     page.chapter_id,
   );
   const projectId = projectRow?.project_id ?? "";
-  const panels: Panel[] = rows.map((r) => ({
-    ...r,
-    dialogue: JSON.parse(r.dialogue || "[]") as Panel["dialogue"],
-    refs: JSON.parse(r.refs || "[]") as string[],
-    image: imageFor(projectId, "panel", r.id),
-  }));
-  return { ...page, panels };
+  return {
+    ...page,
+    script: parseScript(page.script),
+    refs: JSON.parse(page.refs || "[]") as string[],
+    image: imageFor(projectId, "page", page.id),
+  };
 }
 
 export function savePages(
@@ -343,46 +364,38 @@ export function savePages(
   chapterId: string,
   drafts: PageDraft[],
 ): void {
+  const chapter = one<{ title: string }>(
+    "SELECT title FROM chapters WHERE id = ?",
+    chapterId,
+  );
+  const title = chapter?.title ?? "Chapter";
   run("DELETE FROM pages WHERE chapter_id = ?", chapterId);
   for (const [i, draft] of drafts.entries()) {
     const pageId = id();
+    const refIds = draft.refs
+      .map((name) => getCatalogByName(projectId, name)?.id)
+      .filter((v): v is string => Boolean(v));
+    const refs = refIds
+      .map((rid) => getCatalogItem(rid))
+      .filter((v): v is CatalogItem => Boolean(v));
+    const setting = refs.find((r) => r.kind === "location")?.description ?? "";
+    const prompt = pagePrompt(
+      i + 1,
+      title,
+      draft.beat,
+      draft.script.direction,
+      refs,
+      setting,
+    );
     run(
-      "INSERT INTO pages (id, chapter_id, idx, prompt, status) VALUES (?, ?, ?, '', 'planned')",
+      "INSERT INTO pages (id, chapter_id, idx, beat, script, refs, prompt, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'planned')",
       pageId,
       chapterId,
       i,
-    );
-    const refIds = new Set<string>();
-    for (const [j, panel] of draft.panels.entries()) {
-      const ids = panel.refs
-        .map((name) => getCatalogByName(projectId, name)?.id)
-        .filter((v): v is string => Boolean(v));
-      ids.forEach((v) => refIds.add(v));
-      run(
-        "INSERT INTO panels (id, page_id, idx, shot, action, dialogue, refs, row, col, span) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        id(),
-        pageId,
-        j,
-        panel.shot,
-        panel.action,
-        JSON.stringify(panel.dialogue),
-        JSON.stringify(ids),
-        panel.row,
-        panel.col,
-        panel.span,
-      );
-    }
-    const page = toPage(
-      one<PageRow>("SELECT * FROM pages WHERE id = ?", pageId)!,
-    );
-    const refs = [...refIds]
-      .map((rid) => getCatalogItem(rid))
-      .filter((v): v is CatalogItem => Boolean(v));
-    const setting = refs.find((r) => r.kind === "location");
-    run(
-      "UPDATE pages SET prompt = ? WHERE id = ?",
-      pagePrompt(page, refs, setting?.description ?? ""),
-      pageId,
+      draft.beat,
+      JSON.stringify(draft.script),
+      JSON.stringify(refIds),
+      prompt,
     );
   }
   run(
@@ -405,22 +418,22 @@ export function setPageNote(pageId: string, note: string): void {
   run("UPDATE pages SET note = ? WHERE id = ?", note, pageId);
 }
 
-export function setPanelImage(panelId: string, imageId: string): void {
-  run("UPDATE panels SET image_id = ? WHERE id = ?", imageId, panelId);
-  const page = one<{ page_id: string }>(
-    "SELECT page_id FROM panels WHERE id = ?",
-    panelId,
+/** New art lands: the page is drawn again and its approval, and the chapter's, are gone. */
+export function setPageImage(pageId: string): void {
+  run(
+    "UPDATE pages SET status = 'drawn', approved_at = NULL WHERE id = ?",
+    pageId,
   );
-  if (!page) return;
-  const missing = one<{ n: number }>(
-    "SELECT COUNT(*) AS n FROM panels WHERE page_id = ? AND image_id IS NULL",
-    page.page_id,
+  const page = one<{ chapter_id: string }>(
+    "SELECT chapter_id FROM pages WHERE id = ?",
+    pageId,
   );
-  if ((missing?.n ?? 1) === 0)
+  if (page) {
     run(
-      "UPDATE pages SET status = 'drawn' WHERE id = ? AND status = 'planned'",
-      page.page_id,
+      "UPDATE chapters SET status = 'planned', approved_at = NULL WHERE id = ?",
+      page.chapter_id,
     );
+  }
 }
 
 export function setPageStatus(pageId: string, approved: boolean): void {
@@ -482,4 +495,45 @@ export function firstUnfinishedChapter(projectId: string): ChapterRow | null {
     "SELECT * FROM chapters WHERE project_id = ? AND status != 'approved' ORDER BY idx ASC LIMIT 1",
     projectId,
   );
+}
+
+export interface BookPage extends Page {
+  chapterTitle: string;
+  chapterIdx: number;
+}
+
+/** Every approved page of the book, in reading order. */
+export function getBook(projectId: string): BookPage[] {
+  const rows = all<PageRow & { chapterTitle: string; chapterIdx: number }>(
+    `SELECT p.*, c.title AS chapterTitle, c.idx AS chapterIdx
+		FROM pages p JOIN chapters c ON c.id = p.chapter_id
+		WHERE c.project_id = ? AND p.status = 'approved'
+		ORDER BY c.idx ASC, p.idx ASC`,
+    projectId,
+  );
+  return rows.map((row) => ({
+    ...toPage(row),
+    chapterTitle: row.chapterTitle,
+    chapterIdx: row.chapterIdx,
+  }));
+}
+
+export function pageProgress(projectId: string): {
+  pages: number;
+  approved: number;
+  drawn: number;
+} {
+  const row = one<{ pages: number; approved: number; drawn: number }>(
+    `SELECT COUNT(*) AS pages,
+			SUM(CASE WHEN p.status = 'approved' THEN 1 ELSE 0 END) AS approved,
+			SUM(CASE WHEN p.status = 'drawn' THEN 1 ELSE 0 END) AS drawn
+		FROM pages p JOIN chapters c ON c.id = p.chapter_id
+		WHERE c.project_id = ?`,
+    projectId,
+  );
+  return {
+    pages: row?.pages ?? 0,
+    approved: row?.approved ?? 0,
+    drawn: row?.drawn ?? 0,
+  };
 }

@@ -4,7 +4,7 @@
 // story always yields the same catalog, and it is what runs when no model key
 // is set. A real model replaces it, not the other way round.
 
-import { DENSITY, STORY } from "../config";
+import { STORY } from "../config";
 import type {
   Analysis,
   CatalogDraft,
@@ -341,8 +341,6 @@ export function analyseStory(story: string): Analysis {
 
 /** Used only to report what the offline pass will keep. */
 export function offlineNote(story: string): string {
-  const kept = sentences(story).filter(
-    (s) => s.length >= DENSITY.minSentenceChars,
-  ).length;
+  const kept = sentences(story).filter((s) => s.length >= 40).length;
   return `${kept} usable beats found`;
 }

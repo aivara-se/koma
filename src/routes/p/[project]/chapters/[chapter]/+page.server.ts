@@ -1,9 +1,8 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { join } from "node:path";
 import { planChapter } from "$lib/pipeline/plan";
-import { panelPrompt } from "$lib/pipeline/prompts";
 import { IMAGE_DIR } from "$lib/server/db";
-import { drawArt } from "$lib/server/images";
+import { drawPage } from "$lib/server/images";
 import { rewritePrompt } from "$lib/server/llm";
 import {
   catalogProgress,
@@ -11,14 +10,12 @@ import {
   getCatalog,
   getChapter,
   getPage,
-  getProject,
-  reopenPage,
   saveImage,
   savePages,
   setChapterStatus,
+  setPageImage,
   setPagePrompt,
   setPageStatus,
-  setPanelImage,
 } from "$lib/server/repo";
 import type { CatalogItem } from "$lib/types";
 import type { Actions, PageServerLoad } from "./$types";
@@ -34,6 +31,7 @@ export const load: PageServerLoad = ({ params }) => {
     byId: Object.fromEntries(
       catalog.flatMap((c) => [c, ...c.variants]).map((c) => [c.id, c]),
     ) as Record<string, CatalogItem>,
+    locked: Boolean(catalogProgress(params.project)),
   };
 };
 
@@ -48,11 +46,6 @@ export const actions: Actions = {
   plan: async ({ params }) => {
     const chapter = getChapter(params.chapter);
     if (!chapter) return fail(404, { message: "No such chapter" });
-    const project = getProject(params.project);
-    if (!project?.catalog_approved_at)
-      return fail(409, {
-        message: "Lock the catalog before planning a chapter.",
-      });
     const catalog = getCatalog(params.project);
     const characters = catalog
       .filter((c) => c.kind === "character" && !c.excluded)
@@ -70,60 +63,26 @@ export const actions: Actions = {
     redirect(303, `/p/${params.project}/chapters/${params.chapter}`);
   },
 
-  panel: async ({ request, params }) => {
-    const form = await request.formData();
-    const panelId = String(form.get("panelId") ?? "");
-    const pageId = String(form.get("pageId") ?? "");
-    const page = getPage(pageId);
-    const panel = page?.panels.find((p) => p.id === panelId);
-    if (!page || !panel) return fail(404, { message: "No such panel" });
-    if (page.status === "approved") reopenPage(page.id);
-
-    const catalog = getCatalog(params.project);
-    const map = new Map(
-      catalog.flatMap((c) => [c, ...c.variants]).map((c) => [c.id, c]),
-    );
-    const refs = panel.refs
-      .map((id) => map.get(id))
-      .filter((i): i is CatalogItem => Boolean(i));
-    const setting = refs.find((r) => r.kind === "location");
-    const prompt = panelPrompt(page, panel, refs, setting?.description ?? "");
-    const art = await drawArt(prompt, {
-      label: `${page.idx + 1}.${panel.idx + 1}`,
-      kind: "panel",
-      refs: refPaths(refs),
-    });
-    const image = saveImage(params.project, "panel", panel.id, art);
-    setPanelImage(panel.id, image.id);
-    redirect(303, `/p/${params.project}/chapters/${params.chapter}`);
-  },
-
   draw: async ({ request, params }) => {
     const form = await request.formData();
     const pageId = String(form.get("pageId") ?? "");
-    const force = form.get("force") === "on";
     const page = getPage(pageId);
     if (!page) return fail(404, { message: "No such page" });
-    if (page.status === "approved") reopenPage(page.id);
+
     const catalog = getCatalog(params.project);
     const map = new Map(
       catalog.flatMap((c) => [c, ...c.variants]).map((c) => [c.id, c]),
     );
-    for (const panel of page.panels) {
-      if (panel.image && !force) continue;
-      const refs = panel.refs
-        .map((id) => map.get(id))
-        .filter((i): i is CatalogItem => Boolean(i));
-      const setting = refs.find((r) => r.kind === "location");
-      const prompt = panelPrompt(page, panel, refs, setting?.description ?? "");
-      const art = await drawArt(prompt, {
-        label: `${page.idx + 1}.${panel.idx + 1}`,
-        kind: "panel",
-        refs: refPaths(refs),
-      });
-      const image = saveImage(params.project, "panel", panel.id, art);
-      setPanelImage(panel.id, image.id);
-    }
+    const refs = page.refs
+      .map((id) => map.get(id))
+      .filter((i): i is CatalogItem => Boolean(i));
+    const art = await drawPage(page.prompt, {
+      pageNumber: page.idx + 1,
+      beat: page.beat,
+      refs: refPaths(refs),
+    });
+    saveImage(params.project, "page", page.id, art);
+    setPageImage(page.id);
     redirect(303, `/p/${params.project}/chapters/${params.chapter}`);
   },
 
@@ -152,10 +111,8 @@ export const actions: Actions = {
     const approve = form.get("approve") === "1";
     const page = getPage(pageId);
     if (!page) return fail(404, { message: "No such page" });
-    if (approve && page.panels.some((p) => !p.image)) {
-      return fail(409, {
-        message: "Draw every panel before the page is approved.",
-      });
+    if (approve && !page.image) {
+      return fail(409, { message: "Draw the page before approving it." });
     }
     setPageStatus(pageId, approve);
     if (!approve) setChapterStatus(params.chapter, false);

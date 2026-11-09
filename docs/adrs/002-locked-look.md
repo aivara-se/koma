@@ -10,7 +10,7 @@ The first version answers one question: does holding a catalog across a story pr
 
 ## Decision
 
-`src/lib/config.ts` holds the art style block, the image size, the page width, the panels per page and the density. The interface prints them and cannot change them.
+`src/lib/config.ts` holds the art style block, the page size (1K portrait), the panel range and the density. The interface prints them and cannot change them.
 
 The style block is appended to every prompt, word for word, so a plate and a panel say the same thing about the same character.
 

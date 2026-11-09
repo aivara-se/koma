@@ -10,7 +10,7 @@
   <div>
     <h2>Step 3 — chapters</h2>
     <p class="muted small" style="margin:6px 0 0">
-      Plan a chapter into pages of panels, then draw page by page. A chapter is
+      Plan a chapter into pages, then draw one image call per page. A chapter is
       finished when every page in it is approved.
     </p>
   </div>

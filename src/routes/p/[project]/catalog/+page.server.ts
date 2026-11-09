@@ -2,7 +2,7 @@ import { fail, redirect } from "@sveltejs/kit";
 import { join } from "node:path";
 import { characterPrompt, locationPrompt } from "$lib/pipeline/prompts";
 import { IMAGE_DIR } from "$lib/server/db";
-import { drawArt } from "$lib/server/images";
+import { drawPlate } from "$lib/server/images";
 import { hasModel } from "$lib/server/llm";
 import {
   approveCatalog,
@@ -88,9 +88,10 @@ export const actions: Actions = {
           : locationPrompt(item);
 
     const refs = parent ? refsFor(parent) : [];
-    const art = await drawArt(prompt, {
-      label: item.name,
+    const art = await drawPlate(prompt, {
+      label: parent ? `${parent.name} — ${item.name}` : item.name,
       kind: item.kind,
+      description: item.description,
       refs,
     });
     saveImage(params.project, "catalog", item.id, art);

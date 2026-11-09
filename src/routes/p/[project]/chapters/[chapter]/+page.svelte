@@ -1,14 +1,11 @@
 <script lang="ts">
-  import MangaPage from "$lib/components/MangaPage.svelte";
+  import { DENSITY } from "$lib/config";
   import type { ActionData, PageData } from "./$types";
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
   const chapter = $derived(data.chapter);
   const p = $derived(data.progress);
-  const drawn = $derived(
-    chapter.pages.every((pg) => pg.panels.every((pn) => pn.image)),
-  );
   const canApproveChapter = $derived(p.pages > 0 && p.approved === p.pages);
   const refs = (ids: string[]) =>
     ids
@@ -61,11 +58,11 @@
 {#if chapter.pages.length === 0}
   <div class="card empty">
     <h3>No pages yet</h3>
-    <p class="muted small" style="max-width:560px">
-      Planning keeps {Math.round(0.45 * 100)}% of this chapter's beats — the
-      moments a reader needs to follow the story — and lays them out {5} panels to
-      a page. Each panel gets a shot, the action, any spoken line, and the catalog
-      references it must carry.
+    <p class="muted small" style="max-width:620px">
+      Planning cuts this chapter into pages of about {DENSITY.wordsPerPage} source
+      words, in order and without skipping a sentence. Each page gets a beat, a script
+      for the letterer, and the catalog references the drawing must hold. One image
+      call draws the whole page.
     </p>
     <form method="POST" action="?/plan">
       <button class="btn primary" type="submit">Plan this chapter →</button>
@@ -74,14 +71,13 @@
 {:else}
   <div class="pages">
     {#each chapter.pages as page}
-      {@const allDrawn = page.panels.every((pn) => pn.image)}
       <article class="card page-card">
         <header class="row spread page-head">
           <div class="row">
             <h3>Page {String(page.idx + 1).padStart(2, "0")}</h3>
             {#if page.status === "approved"}
               <span class="pill ok">approved</span>
-            {:else if allDrawn}
+            {:else if page.image}
               <span class="pill warn">drawn · review</span>
             {:else}
               <span class="pill">planned</span>
@@ -90,10 +86,9 @@
           <div class="row">
             <form method="POST" action="?/draw">
               <input type="hidden" name="pageId" value={page.id} />
-              <button class="btn small" type="submit">
-                {allDrawn ? "Redraw all panels" : "Draw missing panels"}
-              </button>
-              {#if allDrawn}<input type="hidden" name="force" value="on" />{/if}
+              <button class="btn small" type="submit"
+                >{page.image ? "Redraw page" : "Draw page"}</button
+              >
             </form>
             <form method="POST" action="?/approve">
               <input type="hidden" name="pageId" value={page.id} />
@@ -106,7 +101,7 @@
                 class="btn small"
                 class:primary={page.status !== "approved"}
                 type="submit"
-                disabled={page.status !== "approved" && !allDrawn}
+                disabled={page.status !== "approved" && !page.image}
               >
                 {page.status === "approved" ? "Unapprove" : "Approve page"}
               </button>
@@ -115,16 +110,53 @@
         </header>
 
         <div class="page-body">
-          <div class="preview">
-            <MangaPage {page} byId={data.byId} />
-          </div>
+          <figure class="sheet" class:drawn={!!page.image}>
+            {#if page.image}
+              <img src={page.image.href} alt={page.beat} />
+            {:else}
+              <div class="blank">
+                <span>Page {page.idx + 1}</span>
+                <em>{page.beat}</em>
+              </div>
+            {/if}
+          </figure>
 
           <div class="controls">
+            <section>
+              <div class="label">The page shows</div>
+              <p class="beat">{page.beat}</p>
+            </section>
+
+            <section class="script">
+              <div class="label">Lettering script</div>
+              {#if page.script.caption}
+                <div class="caption">{page.script.caption}</div>
+              {/if}
+              {#each page.script.dialogue as line}
+                <div class="line"><span>{line.speaker}</span>{line.text}</div>
+              {:else}
+                <p class="muted small" style="margin:4px 0 0">
+                  No spoken lines on this page.
+                </p>
+              {/each}
+            </section>
+
+            {#if refs(page.refs).length}
+              <section>
+                <div class="label">References</div>
+                <div class="row">
+                  {#each refs(page.refs) as r}
+                    <span class="chip">{r.name}</span>
+                  {/each}
+                </div>
+              </section>
+            {/if}
+
             <form method="POST" action="?/prompt">
               <input type="hidden" name="pageId" value={page.id} />
               <label class="field">
                 <span>Page prompt</span>
-                <textarea name="prompt" rows="9">{page.prompt}</textarea>
+                <textarea name="prompt" rows="8">{page.prompt}</textarea>
               </label>
               <button class="btn small" type="submit">Save prompt</button>
             </form>
@@ -136,7 +168,7 @@
                 <textarea
                   name="note"
                   rows="2"
-                  placeholder="Sharper on Mira's face in the last panel; the storm should feel louder."
+                  placeholder="Hold the face from the reference sheet; the storm should feel louder."
                 ></textarea>
               </label>
               <button class="btn small ghost" type="submit"
@@ -144,38 +176,11 @@
               >
             </form>
 
-            <div class="panels">
-              {#each page.panels as panel}
-                <div class="panel-row">
-                  <div class="panel-meta">
-                    <div class="row spread">
-                      <strong class="small"
-                        >{panel.idx + 1}. {panel.shot}</strong
-                      >
-                      <form method="POST" action="?/panel">
-                        <input type="hidden" name="pageId" value={page.id} />
-                        <input type="hidden" name="panelId" value={panel.id} />
-                        <button class="btn small ghost" type="submit"
-                          >{panel.image ? "Redraw" : "Draw"}</button
-                        >
-                      </form>
-                    </div>
-                    <p class="small muted" style="margin:2px 0 4px">
-                      {panel.action}
-                    </p>
-                    <div class="row">
-                      {#each refs(panel.refs) as r}
-                        <a
-                          class="chip"
-                          href="/p/{data.project.id}/catalog"
-                          title={r.description}>{r.name}</a
-                        >
-                      {/each}
-                    </div>
-                  </div>
-                </div>
-              {/each}
-            </div>
+            {#if page.image}
+              <div class="mono muted" style="font-size:0.66rem">
+                {page.image.provider}
+              </div>
+            {/if}
           </div>
         </div>
       </article>
@@ -196,11 +201,6 @@
       </button>
     </form>
   </div>
-  {#if !drawn}
-    <p class="muted small" style="margin-top:10px">
-      Some panels have no art yet.
-    </p>
-  {/if}
 {/if}
 
 <style>
@@ -223,18 +223,18 @@
   .pages {
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 20px;
   }
   .page-card {
     padding: 16px;
   }
   .page-head {
-    margin-bottom: 12px;
+    margin-bottom: 14px;
   }
   .page-body {
     display: grid;
-    grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
-    gap: 20px;
+    grid-template-columns: minmax(260px, 400px) minmax(0, 1fr);
+    gap: 24px;
     align-items: start;
   }
   @media (max-width: 860px) {
@@ -242,10 +242,84 @@
       grid-template-columns: 1fr;
     }
   }
+  .sheet {
+    margin: 0;
+    aspect-ratio: 2 / 3;
+    background: #08080a;
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .sheet img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+  .blank {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 0.8rem;
+    text-align: center;
+    padding: 24px;
+    border: 1px dashed var(--line-strong);
+  }
+  .blank em {
+    font-style: normal;
+    font-family: var(--serif);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    opacity: 0.8;
+  }
   .controls {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 16px;
+  }
+  .label {
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .beat {
+    font-family: var(--serif);
+    font-size: 1rem;
+    line-height: 1.6;
+    margin: 0;
+    color: #ddd9cf;
+  }
+  .caption {
+    border-left: 2px solid var(--warn);
+    padding: 4px 0 4px 10px;
+    font-family: var(--serif);
+    font-size: 0.92rem;
+    color: #d8d4ca;
+    margin-bottom: 8px;
+  }
+  .line {
+    font-size: 0.9rem;
+    margin-bottom: 6px;
+  }
+  .line span {
+    color: var(--accent);
+    font-size: 0.66rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-right: 8px;
+  }
+  .chip {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    color: var(--muted);
   }
   .controls textarea {
     font-size: 0.8rem;
@@ -255,36 +329,12 @@
     border-left: 2px solid var(--line-strong);
     padding-left: 12px;
   }
-  .panels {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .panel-row {
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 9px 11px;
-    background: var(--surface-2);
-  }
-  .panel-meta p {
-    line-height: 1.4;
-  }
-  .chip {
-    font-size: 0.68rem;
-    padding: 2px 7px;
-    border-radius: 999px;
-    border: 1px solid var(--line-strong);
-    color: var(--muted);
-  }
-  .chip:hover {
-    color: var(--text);
-  }
   .footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 16px;
     flex-wrap: wrap;
-    margin-top: 18px;
+    margin-top: 20px;
   }
 </style>

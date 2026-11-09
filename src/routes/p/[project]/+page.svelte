@@ -6,7 +6,12 @@
   const project = $derived(data.project);
 </script>
 
-<svelte:head><title>{project.title} — Koma</title></svelte:head>
+<svelte:head>
+  <title>{project.title} — Koma</title>
+  {#if project.analysis_status === "running"}
+    <meta http-equiv="refresh" content="3" />
+  {/if}
+</svelte:head>
 
 {#if form?.message}
   <div class="err" style="margin-bottom:16px">{form.message}</div>
@@ -53,10 +58,24 @@
             <button class="btn ghost small" type="submit">Re-read</button>
           </form>
         </div>
+      {:else if project.analysis_status === "running"}
+        <div class="running">
+          <div class="bar"><div></div></div>
+          <p class="small">
+            Reading the story with the model —
+            <strong>{project.analysis_note || "starting"}</strong> parts. This page
+            refreshes itself, and you can leave it.
+          </p>
+        </div>
       {:else}
+        {#if project.analysis_status === "error"}
+          <div class="err" style="margin-bottom:12px">
+            The model read stopped: {project.analysis_note}
+          </div>
+        {/if}
         {#if data.model}
           <p class="small" style="color:var(--ok)">
-            A model key is set. This pass uses it.
+            A model key is set. This pass uses it, in parts, beside the request.
           </p>
         {:else}
           <p class="small muted">

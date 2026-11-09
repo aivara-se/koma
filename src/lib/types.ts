@@ -8,6 +8,8 @@ export interface Project {
   analysed_at: string | null;
   analyser: string | null;
   catalog_approved_at: string | null;
+  analysis_status: "running" | "done" | "error" | null;
+  analysis_note: string | null;
 }
 
 export interface CatalogRow {
@@ -39,37 +41,35 @@ export interface ChapterRow {
   approved_at: string | null;
 }
 
+export interface Dialogue {
+  speaker: string;
+  text: string;
+}
+
+/** What a letterer needs for one page: the line above, the words, the beats. */
+export interface PageScript {
+  caption: string;
+  dialogue: Dialogue[];
+  /** The beat list the image model composes the page from. */
+  direction: string[];
+}
+
 export interface PageRow {
   id: string;
   chapter_id: string;
   idx: number;
+  beat: string;
+  script: string;
+  refs: string;
   prompt: string;
   note: string;
   status: "planned" | "drawn" | "approved";
   approved_at: string | null;
 }
 
-export interface Dialogue {
-  speaker: string;
-  text: string;
-}
-
-export interface PanelRow {
-  id: string;
-  page_id: string;
-  idx: number;
-  shot: string;
-  action: string;
-  dialogue: string;
-  refs: string;
-  image_id: string | null;
-  row: number;
-  col: number;
-  span: number;
-}
-
-export interface Panel extends Omit<PanelRow, "dialogue" | "refs"> {
-  dialogue: Dialogue[];
+export interface Page extends Omit<PageRow, "script" | "refs"> {
+  script: PageScript;
+  /** Catalog ids this page must hold. */
   refs: string[];
   image: ImageRow | null;
 }
@@ -77,7 +77,7 @@ export interface Panel extends Omit<PanelRow, "dialogue" | "refs"> {
 export interface ImageRow {
   id: string;
   project_id: string;
-  owner: "catalog" | "panel";
+  owner: "catalog" | "page";
   owner_id: string;
   path: string;
   /** Where the browser reads it: `/media/<file>`. */
@@ -87,27 +87,15 @@ export interface ImageRow {
   created_at: string;
 }
 
-export interface Page extends PageRow {
-  panels: Panel[];
-}
-
 export interface Chapter extends ChapterRow {
   pages: Page[];
 }
 
-export interface PanelDraft {
-  shot: string;
-  action: string;
-  dialogue: Dialogue[];
+export interface PageDraft {
+  beat: string;
+  script: PageScript;
   /** Catalog item names, resolved to ids when the page is saved. */
   refs: string[];
-  row: number;
-  col: number;
-  span: number;
-}
-
-export interface PageDraft {
-  panels: PanelDraft[];
 }
 
 export interface VariantDraft {

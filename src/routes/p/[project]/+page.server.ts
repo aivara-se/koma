@@ -1,7 +1,8 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { analyseStory } from "$lib/pipeline/analyze";
-import { hasModel, analyseWithModel, MODEL_MAX_CHARS } from "$lib/server/llm";
+import { hasModel } from "$lib/server/llm";
 import { getProject, saveAnalysis } from "$lib/server/repo";
+import { startAnalysis } from "$lib/server/jobs";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = ({ params }) => {
@@ -13,26 +14,16 @@ export const actions: Actions = {
   analyse: async ({ params }) => {
     const project = getProject(params.project);
     if (!project) return fail(404, { message: "No such story" });
-    if (hasModel && project.story.length > MODEL_MAX_CHARS) {
-      return fail(422, {
-        message: `The model reads at most ${MODEL_MAX_CHARS.toLocaleString()} characters; this story is ${project.story.length.toLocaleString()}. Unset KOMA_API_KEY to read it with the offline extractor, or shorten the story.`,
-      });
+
+    // A novel read takes minutes, so the model pass runs beside the request
+    // and reports from the project row; the offline pass is fast and stays here.
+    if (hasModel) {
+      startAnalysis(params.project, project.story);
+      redirect(303, `/p/${params.project}`);
     }
 
-    let provider = "offline extractor";
-    let analysis;
-    if (hasModel) {
-      try {
-        const result = await analyseWithModel(project.story);
-        analysis = result.analysis;
-        provider = result.provider;
-      } catch (error) {
-        analysis = analyseStory(project.story);
-        provider = `offline extractor (${error instanceof Error ? error.message : "model call failed"})`;
-      }
-    } else {
-      analysis = analyseStory(project.story);
-    }
+    const analysis = analyseStory(project.story);
+    const provider = "offline extractor";
 
     if (analysis.characters.length === 0 && analysis.locations.length === 0) {
       return fail(422, {
