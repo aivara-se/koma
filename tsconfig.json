@@ -1,0 +1,23 @@
+{
+  "extends": "$app/tsconfig",
+  "compilerOptions": {
+    "strict": true,
+    "moduleResolution": "bundler",
+    "types": ["$app/types", "bun"],
+    "allowJs": true,
+    "checkJs": true,
+    "noUncheckedIndexedAccess": true,
+    "paths": {
+      "$lib": ["./src/lib"],
+      "$lib/*": ["./src/lib/*"]
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.js",
+    "src/**/*.svelte",
+    "scripts/**/*.ts",
+    "vite.config.ts"
+  ],
+  "exclude": ["node_modules", "build", "data"]
+}
